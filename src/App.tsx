@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { analyzeRoulette, simulateBettingStrategy, simulateSquareBetting, analyzeCoincidences, analyzeLast10, analyzeSectors, analyzeNeighborsTargetBased, analyzeAutomaticPatterns, analyzeAllNeighbors, type AnalysisResult, type BettingResult, DEFAULT_BET_VALUES, type SequenceId, DEFAULT_COINCIDENCES, type CoincidenceStat, type Last10Analysis, type SectorAnalysisResult, type NeighborsAnalysisResult, type PatternAnalysisResult, type AllNeighborsAnalysisResult } from './logic/roulette';
+import { analyzeWindowOptimization, type OptimizedCoincidenceResult } from './logic/windowOptimization';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 function App() {
@@ -12,7 +13,7 @@ function App() {
   const [isReversed, setIsReversed] = useState(false);
   const [initialBankroll, setInitialBankroll] = useState<number>(500);
   const [betSequenceStr, setBetSequenceStr] = useState(DEFAULT_BET_VALUES.join(', '));
-  const [activeTab, setActiveTab] = useState<'sequences' | 'squares' | 'coincidences' | 'sectors' | 'neighbors'>('sequences');
+  const [activeTab, setActiveTab] = useState<'sequences' | 'squares' | 'coincidences' | 'sectors' | 'neighbors' | 'optimized'>('sequences');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [bettingResult, setBettingResult] = useState<BettingResult | null>(null);
@@ -23,6 +24,7 @@ function App() {
   const [neighborsAnalysis, setNeighborsAnalysis] = useState<NeighborsAnalysisResult | null>(null);
   const [patternAnalysis, setPatternAnalysis] = useState<PatternAnalysisResult | null>(null);
   const [allNeighborsAnalysis, setAllNeighborsAnalysis] = useState<AllNeighborsAnalysisResult | null>(null);
+  const [optimizedCoincidences, setOptimizedCoincidences] = useState<OptimizedCoincidenceResult[] | null>(null);
   const [targetNumber, setTargetNumber] = useState<number>(0);
   const [windowSize, setWindowSize] = useState<number>(1);
   const [neighborsCount, setNeighborsCount] = useState<number>(3);
@@ -41,6 +43,7 @@ function App() {
     setCoincidenceStats(null);
     setLast10Analysis(null);
     setSectorAnalysis(null);
+    setOptimizedCoincidences(null);
 
     if (!input.trim()) {
       setError('Por favor, insira uma lista de números.');
@@ -97,6 +100,9 @@ function App() {
 
     const patterns = analyzeAutomaticPatterns(numbersToProcess, 5, 3);
     setPatternAnalysis(patterns);
+
+    const optimized = analyzeWindowOptimization(numbersToProcess, DEFAULT_COINCIDENCES);
+    setOptimizedCoincidences(optimized);
 
     // Set the first (most recent) number as the default target
     if (numbersToProcess.length > 0) {
@@ -474,6 +480,16 @@ function App() {
               }}
             >
               Vizinhos na Roda
+            </button>
+            <button
+              onClick={() => setActiveTab('optimized')}
+              style={{
+                flex: 1,
+                backgroundColor: activeTab === 'optimized' ? 'var(--accent-color)' : 'var(--card-bg)',
+                border: activeTab === 'optimized' ? 'none' : '1px solid var(--border-color)'
+              }}
+            >
+              Coincidências Otimizadas
             </button>
           </div>
 
@@ -1763,6 +1779,61 @@ function App() {
                 </div>
               )}
             </>
+          )}
+
+          {activeTab === 'optimized' && optimizedCoincidences && (
+            <div className="card" style={{
+              marginBottom: '1.5rem',
+              border: '1px solid #e879f9', // Pink/Fuchsia
+              background: 'linear-gradient(to right, rgba(232, 121, 249, 0.1), transparent)'
+            }}>
+              <h3 style={{ color: '#e879f9', marginBottom: '1rem' }}>⚡ Coincidências Otimizadas por Velocidade</h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                Identificação da janela de giros ideal (2 a 10) para cada gatilho, classificando pela rapidez do acerto.
+              </p>
+              <div className="table-container" style={{ margin: 0 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Gatilho</th>
+                      <th>Faixa Alvo</th>
+                      <th>Melhor Janela</th>
+                      <th>% Acerto Nessa Janela</th>
+                      <th>Eficiência</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {optimizedCoincidences.map((stat, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{stat.config.trigger}</td>
+                        <td>{stat.config.targetRangeStart} – {stat.config.targetRangeEnd}</td>
+                        <td style={{ fontWeight: 'bold' }}>{stat.bestWindow} giros</td>
+                        <td style={{
+                          color: stat.bestPercentage >= 80 ? 'var(--success-color)' :
+                            stat.bestPercentage >= 50 ? '#f59e0b' : 'inherit',
+                          fontWeight: 'bold'
+                        }}>
+                          {stat.bestPercentage.toFixed(1)}%
+                        </td>
+                        <td>
+                          <span style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            fontSize: '0.9rem',
+                            color: stat.urgency === 'Alta Urgência' ? '#f59e0b' : // Star/Gold
+                              stat.urgency === 'Médio Prazo' ? '#facc15' : // Yellow
+                                '#f87171' // Red
+                          }}>
+                            {stat.efficiencyIcon} {stat.urgency}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </>
       )}
