@@ -43,6 +43,108 @@ export function getNeighbors(center: number, k: number): number[] {
     return Array.from(new Set(result));
 }
 
+export function getNeighborsOrdered(center: number, k: number): number[] {
+    const idx = EUROPEAN_WHEEL.indexOf(center);
+    if (idx === -1) return [];
+
+    const n = EUROPEAN_WHEEL.length;
+    const leftNeighbors: number[] = [];
+    const rightNeighbors: number[] = [];
+
+    for (let i = 1; i <= k; i++) {
+        const leftIndex = (idx - i + n) % n;
+        const rightIndex = (idx + i) % n;
+        leftNeighbors.unshift(EUROPEAN_WHEEL[leftIndex]); // Add to start to keep order outer->inner
+        rightNeighbors.push(EUROPEAN_WHEEL[rightIndex]);
+    }
+
+    return [...leftNeighbors, center, ...rightNeighbors];
+}
+
+export interface ExpandedNeighborsResult {
+    targetNumber: number;
+    neighborsCount: number;
+    originalList: number[];
+    plusOneList: number[];
+    minusOneList: number[];
+    finalSequence: number[]; // Concatenated for display
+    uniqueNumbers: number[]; // For hit calculation
+    stats: {
+        original: { hits: number; percentage: number };
+        plusOne: { hits: number; percentage: number };
+        minusOne: { hits: number; percentage: number };
+        total: { hits: number; percentage: number };
+    };
+    windowStats: {
+        last5: { hits: number; percentage: number };
+        last10: { hits: number; percentage: number };
+        last20: { hits: number; percentage: number };
+    };
+}
+
+export function analyzeExpandedNeighbors(
+    numbers: number[],
+    targetNumber: number,
+    k: number
+): ExpandedNeighborsResult {
+    const originalList = getNeighborsOrdered(targetNumber, k);
+
+    const plusOneList = originalList.map(n => (n === 36 ? 0 : n + 1));
+    const minusOneList = originalList.map(n => (n === 0 ? 36 : n - 1));
+
+    const finalSequence = [...originalList, ...plusOneList, ...minusOneList];
+    const uniqueNumbers = Array.from(new Set(finalSequence));
+
+    const totalSpins = numbers.length;
+
+    // Calculate full history stats
+    let hitsOriginal = 0;
+    let hitsPlusOne = 0;
+    let hitsMinusOne = 0;
+    let hitsTotal = 0;
+
+    numbers.forEach(num => {
+        if (originalList.includes(num)) hitsOriginal++;
+        if (plusOneList.includes(num)) hitsPlusOne++;
+        if (minusOneList.includes(num)) hitsMinusOne++;
+        if (uniqueNumbers.includes(num)) hitsTotal++;
+    });
+
+    // Calculate window stats
+    const getLastXStats = (x: number) => {
+        const slice = numbers.slice(-x);
+        let hits = 0;
+        slice.forEach(num => {
+            if (uniqueNumbers.includes(num)) hits++;
+        });
+        return {
+            hits,
+            percentage: x > 0 ? (hits / x) * 100 : 0
+        };
+    };
+
+    return {
+        targetNumber,
+        neighborsCount: k,
+        originalList,
+        plusOneList,
+        minusOneList,
+        finalSequence,
+        uniqueNumbers,
+        stats: {
+            original: { hits: hitsOriginal, percentage: totalSpins > 0 ? (hitsOriginal / totalSpins) * 100 : 0 },
+            plusOne: { hits: hitsPlusOne, percentage: totalSpins > 0 ? (hitsPlusOne / totalSpins) * 100 : 0 },
+            minusOne: { hits: hitsMinusOne, percentage: totalSpins > 0 ? (hitsMinusOne / totalSpins) * 100 : 0 },
+            total: { hits: hitsTotal, percentage: totalSpins > 0 ? (hitsTotal / totalSpins) * 100 : 0 }
+        },
+        windowStats: {
+            last5: getLastXStats(5),
+            last10: getLastXStats(10),
+            last20: getLastXStats(20)
+        }
+    };
+}
+
 export function analyzeNeighborsTargetBased(
     numbers: number[],
     targetNumber: number,

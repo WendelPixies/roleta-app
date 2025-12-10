@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { analyzeRoulette, simulateBettingStrategy, simulateSquareBetting, analyzeCoincidences, analyzeLast10, analyzeSectors, analyzeNeighborsTargetBased, analyzeAutomaticPatterns, analyzeAllNeighbors, type AnalysisResult, type BettingResult, DEFAULT_BET_VALUES, type SequenceId, DEFAULT_COINCIDENCES, type CoincidenceStat, type Last10Analysis, type SectorAnalysisResult, type NeighborsAnalysisResult, type PatternAnalysisResult, type AllNeighborsAnalysisResult } from './logic/roulette';
+import { analyzeRoulette, simulateBettingStrategy, simulateSquareBetting, analyzeCoincidences, analyzeLast10, analyzeSectors, analyzeNeighborsTargetBased, analyzeAutomaticPatterns, analyzeAllNeighbors, analyzeExpandedNeighbors, type AnalysisResult, type BettingResult, DEFAULT_BET_VALUES, type SequenceId, DEFAULT_COINCIDENCES, type CoincidenceStat, type Last10Analysis, type SectorAnalysisResult, type NeighborsAnalysisResult, type PatternAnalysisResult, type AllNeighborsAnalysisResult, type ExpandedNeighborsResult } from './logic/roulette';
 import { analyzeWindowOptimization, type OptimizedCoincidenceResult } from './logic/windowOptimization';
 import { analyzeTargetAsNeighbor, type TargetAsNeighborResult } from './logic/targetNeighborAnalysis';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -14,7 +14,7 @@ function App() {
   const [isReversed, setIsReversed] = useState(false);
   const [initialBankroll, setInitialBankroll] = useState<number>(500);
   const [betSequenceStr, setBetSequenceStr] = useState(DEFAULT_BET_VALUES.join(', '));
-  const [activeTab, setActiveTab] = useState<'sequences' | 'squares' | 'coincidences' | 'sectors' | 'neighbors' | 'optimized'>('sequences');
+  const [activeTab, setActiveTab] = useState<'sequences' | 'squares' | 'coincidences' | 'sectors' | 'neighbors' | 'optimized' | 'expanded'>('sequences');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [bettingResult, setBettingResult] = useState<BettingResult | null>(null);
@@ -27,6 +27,7 @@ function App() {
   const [allNeighborsAnalysis, setAllNeighborsAnalysis] = useState<AllNeighborsAnalysisResult | null>(null);
   const [optimizedCoincidences, setOptimizedCoincidences] = useState<OptimizedCoincidenceResult[] | null>(null);
   const [targetAsNeighborResult, setTargetAsNeighborResult] = useState<TargetAsNeighborResult | null>(null);
+  const [expandedNeighborsResult, setExpandedNeighborsResult] = useState<ExpandedNeighborsResult | null>(null);
   const [targetNumber, setTargetNumber] = useState<number>(0);
   const [windowSize, setWindowSize] = useState<number>(1);
   const [neighborsCount, setNeighborsCount] = useState<number>(3);
@@ -493,6 +494,16 @@ function App() {
               }}
             >
               Coincidências Otimizadas
+            </button>
+            <button
+              onClick={() => setActiveTab('expanded')}
+              style={{
+                flex: 1,
+                backgroundColor: activeTab === 'expanded' ? 'var(--accent-color)' : 'var(--card-bg)',
+                border: activeTab === 'expanded' ? 'none' : '1px solid var(--border-color)'
+              }}
+            >
+              Vizinhos Expandido
             </button>
           </div>
 
@@ -1880,6 +1891,196 @@ function App() {
                 </div>
               )}
             </>
+          )}
+
+          {activeTab === 'expanded' && (
+            <div className="card" style={{
+              marginBottom: '1.5rem',
+              border: '1px solid #ec4899',
+              background: 'linear-gradient(to right, rgba(236, 72, 153, 0.1), transparent)'
+            }}>
+              <h3 style={{ color: '#ec4899', marginBottom: '1rem' }}>🎯 Vizinhos Expandido (+1 / -1)</h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                Gera listas de vizinhos originais, +1 e -1, e analisa o desempenho da sequência combinada.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Número-Alvo
+                  </label>
+                  <select
+                    value={targetNumber}
+                    onChange={(e) => setTargetNumber(Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      backgroundColor: '#020617',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'white',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    {Array.from({ length: 37 }, (_, i) => i).map(num => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Vizinhos de Cada Lado
+                  </label>
+                  <select
+                    value={neighborsCount}
+                    onChange={(e) => setNeighborsCount(Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      backgroundColor: '#020617',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'white',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    <option value={2}>2 vizinhos</option>
+                    <option value={3}>3 vizinhos</option>
+                    <option value={4}>4 vizinhos</option>
+                    <option value={5}>5 vizinhos</option>
+                    <option value={6}>6 vizinhos</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (!input.trim()) {
+                    setError('Por favor, insira uma lista de números primeiro.');
+                    return;
+                  }
+
+                  const numbers = input
+                    .trim()
+                    .split(/[,\s]+/)
+                    .map(s => parseInt(s, 10))
+                    .filter(n => !isNaN(n));
+
+                  if (numbers.length === 0) {
+                    setError('Nenhum número válido encontrado.');
+                    return;
+                  }
+
+                  let numbersToProcess = [...numbers];
+                  if (isReversed) {
+                    numbersToProcess.reverse();
+                  }
+
+                  const analysis = analyzeExpandedNeighbors(numbersToProcess, targetNumber, neighborsCount);
+                  setExpandedNeighborsResult(analysis);
+                  setError(null);
+                }}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#ec4899',
+                  border: 'none',
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+              >
+                Gerar Sequência Expandida
+              </button>
+
+              {expandedNeighborsResult && (
+                <div style={{ marginTop: '2rem' }}>
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h4 style={{ color: '#ec4899', marginBottom: '0.5rem' }}>Sequência Final ({expandedNeighborsResult.uniqueNumbers.length} números únicos)</h4>
+                    <div style={{
+                      backgroundColor: '#334155',
+                      padding: '1rem',
+                      borderRadius: '8px',
+                      fontFamily: 'monospace',
+                      fontSize: '1.1rem',
+                      wordBreak: 'break-all',
+                      lineHeight: '1.6'
+                    }}>
+                      {expandedNeighborsResult.finalSequence.join(' ')}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Vizinhos Originais</div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
+                        {expandedNeighborsResult.stats.original.percentage.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.original.hits} acertos</div>
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        {expandedNeighborsResult.originalList.join(' ')}
+                      </div>
+                    </div>
+                    <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Lista +1</div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
+                        {expandedNeighborsResult.stats.plusOne.percentage.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.plusOne.hits} acertos</div>
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        {expandedNeighborsResult.plusOneList.join(' ')}
+                      </div>
+                    </div>
+                    <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Lista -1</div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
+                        {expandedNeighborsResult.stats.minusOne.percentage.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.minusOne.hits} acertos</div>
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        {expandedNeighborsResult.minusOneList.join(' ')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card" style={{ border: '1px solid #ec4899' }}>
+                    <h4 style={{ color: '#ec4899', marginBottom: '1rem' }}>Desempenho Total (Sequência Expandida)</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Histórico</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#ec4899' }}>
+                          {expandedNeighborsResult.stats.total.percentage.toFixed(1)}%
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.total.hits} acertos</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 5</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last5.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
+                          {expandedNeighborsResult.windowStats.last5.percentage.toFixed(0)}%
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last5.hits}/5</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 10</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last10.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
+                          {expandedNeighborsResult.windowStats.last10.percentage.toFixed(0)}%
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last10.hits}/10</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 20</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last20.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
+                          {expandedNeighborsResult.windowStats.last20.percentage.toFixed(0)}%
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last20.hits}/20</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {activeTab === 'optimized' && optimizedCoincidences && (
