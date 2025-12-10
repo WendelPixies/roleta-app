@@ -92,8 +92,9 @@ export function analyzeExpandedNeighbors(
     const plusOneList = originalList.map(n => (n === 36 ? 0 : n + 1));
     const minusOneList = originalList.map(n => (n === 0 ? 36 : n - 1));
 
-    const finalSequence = [...originalList, ...plusOneList, ...minusOneList];
-    const uniqueNumbers = Array.from(new Set(finalSequence));
+    const combinedSequence = [...originalList, ...plusOneList, ...minusOneList];
+    const finalSequence = Array.from(new Set(combinedSequence));
+    const uniqueNumbers = finalSequence;
 
     const totalSpins = numbers.length;
 
