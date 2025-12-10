@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { analyzeRoulette, simulateBettingStrategy, simulateSquareBetting, analyzeCoincidences, analyzeLast10, analyzeSectors, analyzeNeighborsTargetBased, analyzeAutomaticPatterns, analyzeAllNeighbors, type AnalysisResult, type BettingResult, DEFAULT_BET_VALUES, type SequenceId, DEFAULT_COINCIDENCES, type CoincidenceStat, type Last10Analysis, type SectorAnalysisResult, type NeighborsAnalysisResult, type PatternAnalysisResult, type AllNeighborsAnalysisResult } from './logic/roulette';
 import { analyzeWindowOptimization, type OptimizedCoincidenceResult } from './logic/windowOptimization';
+import { analyzeTargetAsNeighbor, type TargetAsNeighborResult } from './logic/targetNeighborAnalysis';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
   const [patternAnalysis, setPatternAnalysis] = useState<PatternAnalysisResult | null>(null);
   const [allNeighborsAnalysis, setAllNeighborsAnalysis] = useState<AllNeighborsAnalysisResult | null>(null);
   const [optimizedCoincidences, setOptimizedCoincidences] = useState<OptimizedCoincidenceResult[] | null>(null);
+  const [targetAsNeighborResult, setTargetAsNeighborResult] = useState<TargetAsNeighborResult | null>(null);
   const [targetNumber, setTargetNumber] = useState<number>(0);
   const [windowSize, setWindowSize] = useState<number>(1);
   const [neighborsCount, setNeighborsCount] = useState<number>(3);
@@ -44,6 +46,7 @@ function App() {
     setLast10Analysis(null);
     setSectorAnalysis(null);
     setOptimizedCoincidences(null);
+    setTargetAsNeighborResult(null);
 
     if (!input.trim()) {
       setError('Por favor, insira uma lista de números.');
@@ -1438,6 +1441,104 @@ function App() {
                 >
                   Gerar Tabela Completa (Todos os Números)
                 </button>
+
+                <div style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid var(--border-color)' }}>
+                  <h3 style={{ color: '#8b5cf6', marginBottom: '1rem' }}>🎯 Alvo como Vizinho</h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                    Verifique se o número seguinte ao alvo cai na vizinhança de algum centro específico (considerando {neighborsCount} vizinhos).
+                  </p>
+
+                  <button
+                    onClick={() => {
+                      if (!input.trim()) {
+                        setError('Por favor, insira uma lista de números primeiro.');
+                        return;
+                      }
+
+                      const numbers = input
+                        .trim()
+                        .split(/[,\s]+/)
+                        .map(s => parseInt(s, 10))
+                        .filter(n => !isNaN(n));
+
+                      if (numbers.length === 0) {
+                        setError('Nenhum número válido encontrado.');
+                        return;
+                      }
+
+                      let numbersToProcess = [...numbers];
+                      if (isReversed) {
+                        numbersToProcess.reverse();
+                      }
+
+                      const analysis = analyzeTargetAsNeighbor(numbersToProcess, targetNumber, neighborsCount);
+                      setTargetAsNeighborResult(analysis);
+                      setError(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#8b5cf6',
+                      border: 'none',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      color: 'white',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    Analisar Alvo {targetNumber} com {neighborsCount} Vizinhos
+                  </button>
+
+                  {targetAsNeighborResult && (
+                    <div style={{ marginTop: '1.5rem' }}>
+                      {targetAsNeighborResult.centers.length > 0 ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                          {targetAsNeighborResult.centers.map((centerStat) => (
+                            <div key={centerStat.center} className="card" style={{ border: '1px solid #8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.05)' }}>
+                              <h3 style={{ color: '#8b5cf6', marginBottom: '0.5rem' }}>
+                                Centro {centerStat.center} ({centerStat.k} vizinhos)
+                              </h3>
+                              <div style={{ marginBottom: '0.5rem' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Ocorrências do Alvo: </span>
+                                <strong>{centerStat.targetOccurrences}</strong>
+                              </div>
+                              <div style={{ marginBottom: '0.5rem' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Acertos (Next in Range): </span>
+                                <strong style={{ color: 'var(--success-color)' }}>{centerStat.hits}</strong>
+                              </div>
+                              <div style={{ marginBottom: '1rem' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>% de Acerto: </span>
+                                <strong style={{ fontSize: '1.2rem' }}>{centerStat.percentage.toFixed(1)}%</strong>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                                  Números Cobertos:
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                  {centerStat.coveredNumbers.map((num, idx) => (
+                                    <span key={idx} style={{
+                                      backgroundColor: '#334155',
+                                      padding: '0.1rem 0.4rem',
+                                      borderRadius: '4px',
+                                      fontSize: '0.8rem'
+                                    }}>
+                                      {num}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="card" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                          Nenhum centro com {targetAsNeighborResult.k} vizinhos conseguiu cobrir o sorteio seguinte ao número alvo {targetAsNeighborResult.target}.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {neighborsAnalysis && (
