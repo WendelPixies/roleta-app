@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { analyzeRoulette, simulateBettingStrategy, simulateSquareBetting, analyzeCoincidences, analyzeLast10, analyzeSectors, analyzeNeighborsTargetBased, analyzeAutomaticPatterns, analyzeAllNeighbors, analyzeExpandedNeighbors, type AnalysisResult, type BettingResult, DEFAULT_BET_VALUES, type SequenceId, DEFAULT_COINCIDENCES, type CoincidenceStat, type Last10Analysis, type SectorAnalysisResult, type NeighborsAnalysisResult, type PatternAnalysisResult, type AllNeighborsAnalysisResult, type ExpandedNeighborsResult } from './logic/roulette';
 import { analyzeWindowOptimization, type OptimizedCoincidenceResult } from './logic/windowOptimization';
 import { analyzeTargetAsNeighbor, type TargetAsNeighborResult } from './logic/targetNeighborAnalysis';
+import { simulateExpandedBetting } from './logic/expandedBetting';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
   const [optimizedCoincidences, setOptimizedCoincidences] = useState<OptimizedCoincidenceResult[] | null>(null);
   const [targetAsNeighborResult, setTargetAsNeighborResult] = useState<TargetAsNeighborResult | null>(null);
   const [expandedNeighborsResult, setExpandedNeighborsResult] = useState<ExpandedNeighborsResult | null>(null);
+  const [expandedBettingResult, setExpandedBettingResult] = useState<BettingResult | null>(null);
   const [targetNumber, setTargetNumber] = useState<number>(0);
   const [windowSize, setWindowSize] = useState<number>(1);
   const [neighborsCount, setNeighborsCount] = useState<number>(3);
@@ -37,6 +39,7 @@ function App() {
   const [showSquaresLog, setShowSquaresLog] = useState(false);
   const [showBetLog, setShowBetLog] = useState(false);
   const [showSquareBetLog, setShowSquareBetLog] = useState(false);
+  const [showExpandedBetLog, setShowExpandedBetLog] = useState(false);
 
   const handleCalculate = () => {
     setError(null);
@@ -48,6 +51,7 @@ function App() {
     setSectorAnalysis(null);
     setOptimizedCoincidences(null);
     setTargetAsNeighborResult(null);
+    setExpandedBettingResult(null);
 
     if (!input.trim()) {
       setError('Por favor, insira uma lista de números.');
@@ -1978,6 +1982,21 @@ function App() {
 
                   const analysis = analyzeExpandedNeighbors(numbersToProcess, targetNumber, neighborsCount);
                   setExpandedNeighborsResult(analysis);
+
+                  // Run betting simulation on the expanded sequence
+                  const betValues = betSequenceStr
+                    .split(/[,\s]+/)
+                    .map(s => parseFloat(s))
+                    .filter(n => !isNaN(n) && n > 0);
+
+                  const betting = simulateExpandedBetting(
+                    numbersToProcess,
+                    analysis.uniqueNumbers,
+                    initialBankroll,
+                    betValues.length > 0 ? betValues : DEFAULT_BET_VALUES
+                  );
+                  setExpandedBettingResult(betting);
+
                   setError(null);
                 }}
                 style={{
@@ -2078,6 +2097,116 @@ function App() {
                       </div>
                     </div>
                   </div>
+
+                  {expandedBettingResult && (
+                    <>
+                      <h3 style={{ marginBottom: '1rem', marginTop: '2rem' }}>
+                        Simulação de Apostas (Vizinhos Expandido)
+                        {expandedBettingResult.status === 'BROKE' && <span style={{ color: 'var(--error-color)', marginLeft: '1rem' }}>🚨 QUEBROU</span>}
+                        {expandedBettingResult.status === 'SURVIVED' && <span style={{ color: 'var(--success-color)', marginLeft: '1rem' }}>✅ SOBREVIVEU</span>}
+                      </h3>
+
+                      <div className="results-grid">
+                        <div className="card">
+                          <h3>Saldo Final</h3>
+                          <div className="value" style={{ color: expandedBettingResult.finalBalance >= initialBankroll ? 'var(--success-color)' : 'var(--error-color)' }}>
+                            R$ {expandedBettingResult.finalBalance.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="card">
+                          <h3>Pior Banca</h3>
+                          <div className="value" style={{ color: 'var(--error-color)' }}>
+                            R$ {expandedBettingResult.lowestBalance.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="card">
+                          <h3>Aposta Máxima</h3>
+                          <div className="value">
+                            R$ {expandedBettingResult.maxBetUsed.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="card">
+                          <h3>Estatísticas</h3>
+                          <div className="value" style={{ fontSize: '1.5rem' }}>
+                            {expandedBettingResult.totalWins}V / {expandedBettingResult.totalLosses}D
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="card" style={{ marginBottom: '2rem', height: '300px', padding: '1rem' }}>
+                        <h3 style={{ marginBottom: '1rem' }}>Evolução da Banca (Expandido)</h3>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={expandedBettingResult.log}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis dataKey="spinIndex" stroke="#94a3b8" />
+                            <YAxis stroke="#94a3b8" domain={['auto', 'auto']} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+                              itemStyle={{ color: '#f8fafc' }}
+                              formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Saldo']}
+                              labelFormatter={(label) => `Giro ${label}`}
+                            />
+                            <ReferenceLine y={initialBankroll} stroke="#94a3b8" strokeDasharray="3 3" />
+                            <Line
+                              type="monotone"
+                              dataKey="balanceAfter"
+                              stroke="#ec4899"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="log-section" style={{ marginBottom: '2rem' }}>
+                        <button
+                          onClick={() => setShowExpandedBetLog(!showExpandedBetLog)}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: '1px solid var(--border-color)',
+                            width: '100%'
+                          }}
+                        >
+                          {showExpandedBetLog ? 'Ocultar Log de Apostas (Expandido)' : 'Ver Log de Apostas (Expandido)'}
+                        </button>
+
+                        {showExpandedBetLog && (
+                          <div className="table-container" style={{ marginTop: '1rem' }}>
+                            <table className="log-table">
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>Número</th>
+                                  <th>Aposta Total</th>
+                                  <th>Resultado</th>
+                                  <th>Lucro</th>
+                                  <th>Saldo</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {expandedBettingResult.log.map((row) => (
+                                  <tr key={row.spinIndex}>
+                                    <td>{row.spinIndex}</td>
+                                    <td>{row.number}</td>
+                                    <td>R$ {row.betAmount.toFixed(2)}</td>
+                                    <td className={row.result === 'WIN' ? 'status-hit' : 'status-miss'}>
+                                      {row.result === 'WIN' ? 'VITÓRIA' : 'DERROTA'}
+                                    </td>
+                                    <td style={{ color: row.profit >= 0 ? 'var(--success-color)' : 'var(--error-color)' }}>
+                                      {row.profit >= 0 ? '+' : ''}{row.profit.toFixed(2)}
+                                    </td>
+                                    <td style={{ fontWeight: 'bold' }}>
+                                      R$ {row.balanceAfter.toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
