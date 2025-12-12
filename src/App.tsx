@@ -4,6 +4,7 @@ import { analyzeRoulette, simulateBettingStrategy, simulateSquareBetting, analyz
 import { analyzeWindowOptimization, type OptimizedCoincidenceResult } from './logic/windowOptimization';
 import { analyzeTargetAsNeighbor, type TargetAsNeighborResult } from './logic/targetNeighborAnalysis';
 import { simulateExpandedBetting } from './logic/expandedBetting';
+import { analyzeRangesByTarget, type RangeAnalysisStats } from './logic/rangeAnalysis';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 function App() {
@@ -15,7 +16,7 @@ function App() {
   const [isReversed, setIsReversed] = useState(false);
   const [initialBankroll, setInitialBankroll] = useState<number>(500);
   const [betSequenceStr, setBetSequenceStr] = useState(DEFAULT_BET_VALUES.join(', '));
-  const [activeTab, setActiveTab] = useState<'sequences' | 'squares' | 'coincidences' | 'sectors' | 'neighbors' | 'optimized' | 'expanded'>('sequences');
+  const [activeTab, setActiveTab] = useState<'sequences' | 'squares' | 'coincidences' | 'sectors' | 'neighbors' | 'optimized' | 'expanded' | 'ranges'>('sequences');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [bettingResult, setBettingResult] = useState<BettingResult | null>(null);
@@ -30,6 +31,7 @@ function App() {
   const [targetAsNeighborResult, setTargetAsNeighborResult] = useState<TargetAsNeighborResult | null>(null);
   const [expandedNeighborsResult, setExpandedNeighborsResult] = useState<ExpandedNeighborsResult | null>(null);
   const [expandedBettingResult, setExpandedBettingResult] = useState<BettingResult | null>(null);
+  const [rangeAnalysisResult, setRangeAnalysisResult] = useState<RangeAnalysisStats[] | null>(null);
   const [targetNumber, setTargetNumber] = useState<number>(0);
   const [windowSize, setWindowSize] = useState<number>(1);
   const [neighborsCount, setNeighborsCount] = useState<number>(3);
@@ -52,6 +54,7 @@ function App() {
     setOptimizedCoincidences(null);
     setTargetAsNeighborResult(null);
     setExpandedBettingResult(null);
+    setRangeAnalysisResult(null);
 
     if (!input.trim()) {
       setError('Por favor, insira uma lista de números.');
@@ -508,6 +511,16 @@ function App() {
               }}
             >
               Vizinhos Expandido
+            </button>
+            <button
+              onClick={() => setActiveTab('ranges')}
+              style={{
+                flex: 1,
+                backgroundColor: activeTab === 'ranges' ? 'var(--accent-color)' : 'var(--card-bg)',
+                border: activeTab === 'ranges' ? 'none' : '1px solid var(--border-color)'
+              }}
+            >
+              Faixas Pós-Alvo
             </button>
           </div>
 
@@ -1597,10 +1610,18 @@ function App() {
                         </div>
                       </div>
                     </div>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem', marginBottom: 0 }}>
-                      Os percentuais consideram os {neighborsAnalysis.windowSize} {neighborsAnalysis.windowSize === 1 ? 'sorteio seguinte' : 'sorteios seguintes'} a cada vez que o número-alvo {neighborsAnalysis.targetNumber} apareceu, verificando se ele ou algum dos seus vizinhos saiu nesse intervalo.
-                    </p>
                   </div>
+
+
+
+
+
+
+
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem', marginBottom: 0 }}>
+                    Os percentuais consideram os {neighborsAnalysis.windowSize} {neighborsAnalysis.windowSize === 1 ? 'sorteio seguinte' : 'sorteios seguintes'} a cada vez que o número-alvo {neighborsAnalysis.targetNumber} apareceu, verificando se ele ou algum dos seus vizinhos saiu nesse intervalo.
+                  </p>
+
 
                   <div className="card" style={{
                     marginBottom: '1.5rem',
@@ -1810,465 +1831,585 @@ function App() {
                     })()}
                   </div>
                 </>
-              )}
+              )
+              }
 
               {/* ALL NEIGHBORS TABLE */}
-              {allNeighborsAnalysis && (
-                <div className="card" style={{
-                  marginBottom: '1.5rem',
-                  border: '1px solid #3b82f6',
-                  background: 'linear-gradient(to right, rgba(59, 130, 246, 0.1), transparent)'
-                }}>
-                  <h3 style={{ color: '#3b82f6', marginBottom: '1rem' }}>📊 Tabela Completa - Todos os Números</h3>
-                  <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                    Percentual de acerto para cada número e quantidade de vizinhos (janela de {allNeighborsAnalysis.windowSize} {allNeighborsAnalysis.windowSize === 1 ? 'giro' : 'giros'}).
-                  </p>
-
-                  <div className="table-container" style={{ margin: 0, maxHeight: '600px', overflowY: 'auto' }}>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Número</th>
-                          <th>Ocorrências</th>
-                          <th>2 Vizinhos</th>
-                          <th>3 Vizinhos</th>
-                          <th>4 Vizinhos</th>
-                          <th>5 Vizinhos</th>
-                          <th>6 Vizinhos</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allNeighborsAnalysis.rows.map((row) => {
-                          const bestPct = Math.max(...Object.values(row.percentages));
-
-                          return (
-                            <tr key={row.number}>
-                              <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                                {row.number}
-                              </td>
-                              <td style={{ color: row.occurrences === 0 ? 'var(--text-secondary)' : 'inherit' }}>
-                                {row.occurrences === 0 ? '-' : row.occurrences}
-                              </td>
-                              {[2, 3, 4, 5, 6].map(k => {
-                                const pct = row.percentages[k];
-                                const isBest = pct === bestPct && pct > 0;
-
-                                return (
-                                  <td
-                                    key={k}
-                                    style={{
-                                      backgroundColor: isBest ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-                                      fontWeight: isBest ? 'bold' : 'normal',
-                                      color: row.occurrences === 0 ? 'var(--text-secondary)' :
-                                        pct >= 70 ? '#10b981' :
-                                          pct >= 50 ? '#f59e0b' :
-                                            'inherit'
-                                    }}
-                                  >
-                                    {row.occurrences === 0 ? '-' : `${pct.toFixed(1)}%`}
-                                    {isBest && pct > 0 && ' 🏆'}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div style={{
-                    marginTop: '1rem',
-                    padding: '1rem',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    borderRadius: '8px',
-                    fontSize: '0.85rem'
+              {
+                allNeighborsAnalysis && (
+                  <div className="card" style={{
+                    marginBottom: '1.5rem',
+                    border: '1px solid #3b82f6',
+                    background: 'linear-gradient(to right, rgba(59, 130, 246, 0.1), transparent)'
                   }}>
-                    <h4 style={{ color: '#3b82f6', marginTop: 0, marginBottom: '0.5rem' }}>📖 Legenda:</h4>
-                    <ul style={{ margin: 0, paddingLeft: '1.5rem', color: 'var(--text-secondary)' }}>
-                      <li><span style={{ color: '#10b981' }}>Verde (≥70%)</span>: Excelente taxa de acerto</li>
-                      <li><span style={{ color: '#f59e0b' }}>Laranja (≥50%)</span>: Boa taxa de acerto</li>
-                      <li><strong>🏆</strong>: Melhor quantidade de vizinhos para este número</li>
-                      <li><span style={{ color: 'var(--text-secondary)' }}>-</span>: Número não apareceu na sequência</li>
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                    <h3 style={{ color: '#3b82f6', marginBottom: '1rem' }}>📊 Tabela Completa - Todos os Números</h3>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                      Percentual de acerto para cada número e quantidade de vizinhos (janela de {allNeighborsAnalysis.windowSize} {allNeighborsAnalysis.windowSize === 1 ? 'giro' : 'giros'}).
+                    </p>
 
-          {activeTab === 'expanded' && (
-            <div className="card" style={{
-              marginBottom: '1.5rem',
-              border: '1px solid #ec4899',
-              background: 'linear-gradient(to right, rgba(236, 72, 153, 0.1), transparent)'
-            }}>
-              <h3 style={{ color: '#ec4899', marginBottom: '1rem' }}>🎯 Vizinhos Expandido (+1 / -1)</h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Gera listas de vizinhos originais, +1 e -1, e analisa o desempenho da sequência combinada.
-              </p>
+                    <div className="table-container" style={{ margin: 0, maxHeight: '600px', overflowY: 'auto' }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Número</th>
+                            <th>Ocorrências</th>
+                            <th>2 Vizinhos</th>
+                            <th>3 Vizinhos</th>
+                            <th>4 Vizinhos</th>
+                            <th>5 Vizinhos</th>
+                            <th>6 Vizinhos</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allNeighborsAnalysis.rows.map((row) => {
+                            const bestPct = Math.max(...Object.values(row.percentages));
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                    Número-Alvo
-                  </label>
-                  <select
-                    value={targetNumber}
-                    onChange={(e) => setTargetNumber(Number(e.target.value))}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      backgroundColor: '#020617',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      color: 'white',
-                      fontSize: '1rem'
-                    }}
-                  >
-                    {Array.from({ length: 37 }, (_, i) => i).map(num => (
-                      <option key={num} value={num}>{num}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                    Vizinhos de Cada Lado
-                  </label>
-                  <select
-                    value={neighborsCount}
-                    onChange={(e) => setNeighborsCount(Number(e.target.value))}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      backgroundColor: '#020617',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      color: 'white',
-                      fontSize: '1rem'
-                    }}
-                  >
-                    <option value={2}>2 vizinhos</option>
-                    <option value={3}>3 vizinhos</option>
-                    <option value={4}>4 vizinhos</option>
-                    <option value={5}>5 vizinhos</option>
-                    <option value={6}>6 vizinhos</option>
-                  </select>
-                </div>
-              </div>
+                            return (
+                              <tr key={row.number}>
+                                <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                  {row.number}
+                                </td>
+                                <td style={{ color: row.occurrences === 0 ? 'var(--text-secondary)' : 'inherit' }}>
+                                  {row.occurrences === 0 ? '-' : row.occurrences}
+                                </td>
+                                {[2, 3, 4, 5, 6].map(k => {
+                                  const pct = row.percentages[k];
+                                  const isBest = pct === bestPct && pct > 0;
 
-              <button
-                onClick={() => {
-                  if (!input.trim()) {
-                    setError('Por favor, insira uma lista de números primeiro.');
-                    return;
-                  }
+                                  return (
+                                    <td
+                                      key={k}
+                                      style={{
+                                        backgroundColor: isBest ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                                        fontWeight: isBest ? 'bold' : 'normal',
+                                        color: row.occurrences === 0 ? 'var(--text-secondary)' :
+                                          pct >= 70 ? '#10b981' :
+                                            pct >= 50 ? '#f59e0b' :
+                                              'inherit'
+                                      }}
+                                    >
+                                      {row.occurrences === 0 ? '-' : `${pct.toFixed(1)}%`}
+                                      {isBest && pct > 0 && ' 🏆'}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                  const numbers = input
-                    .trim()
-                    .split(/[,\s]+/)
-                    .map(s => parseInt(s, 10))
-                    .filter(n => !isNaN(n));
-
-                  if (numbers.length === 0) {
-                    setError('Nenhum número válido encontrado.');
-                    return;
-                  }
-
-                  let numbersToProcess = [...numbers];
-                  if (isReversed) {
-                    numbersToProcess.reverse();
-                  }
-
-                  const analysis = analyzeExpandedNeighbors(numbersToProcess, targetNumber, neighborsCount);
-                  setExpandedNeighborsResult(analysis);
-
-                  // Run betting simulation on the expanded sequence
-                  const betValues = betSequenceStr
-                    .split(/[,\s]+/)
-                    .map(s => parseFloat(s))
-                    .filter(n => !isNaN(n) && n > 0);
-
-                  const betting = simulateExpandedBetting(
-                    numbersToProcess,
-                    analysis.uniqueNumbers,
-                    initialBankroll,
-                    betValues.length > 0 ? betValues : DEFAULT_BET_VALUES
-                  );
-                  setExpandedBettingResult(betting);
-
-                  setError(null);
-                }}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#ec4899',
-                  border: 'none',
-                  padding: '0.75rem',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  fontSize: '1rem'
-                }}
-              >
-                Gerar Sequência Expandida
-              </button>
-
-              {expandedNeighborsResult && (
-                <div style={{ marginTop: '2rem' }}>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#ec4899', marginBottom: '0.5rem' }}>Sequência Final ({expandedNeighborsResult.uniqueNumbers.length} números únicos)</h4>
                     <div style={{
-                      backgroundColor: '#334155',
+                      marginTop: '1rem',
                       padding: '1rem',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
                       borderRadius: '8px',
-                      fontFamily: 'monospace',
-                      fontSize: '1.1rem',
-                      wordBreak: 'break-all',
-                      lineHeight: '1.6'
+                      fontSize: '0.85rem'
                     }}>
-                      {expandedNeighborsResult.finalSequence.join(' ')}
+                      <h4 style={{ color: '#3b82f6', marginTop: 0, marginBottom: '0.5rem' }}>📖 Legenda:</h4>
+                      <ul style={{ margin: 0, paddingLeft: '1.5rem', color: 'var(--text-secondary)' }}>
+                        <li><span style={{ color: '#10b981' }}>Verde (≥70%)</span>: Excelente taxa de acerto</li>
+                        <li><span style={{ color: '#f59e0b' }}>Laranja (≥50%)</span>: Boa taxa de acerto</li>
+                        <li><strong>🏆</strong>: Melhor quantidade de vizinhos para este número</li>
+                        <li><span style={{ color: 'var(--text-secondary)' }}>-</span>: Número não apareceu na sequência</li>
+                      </ul>
                     </div>
                   </div>
+                )
+              }
+            </>
+          )
+          }
+        </>
+      )
+      }
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                    <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Vizinhos Originais</div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
-                        {expandedNeighborsResult.stats.original.percentage.toFixed(1)}%
-                      </div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.original.hits} acertos</div>
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
-                        {expandedNeighborsResult.originalList.join(' ')}
-                      </div>
-                    </div>
-                    <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Lista +1</div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
-                        {expandedNeighborsResult.stats.plusOne.percentage.toFixed(1)}%
-                      </div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.plusOne.hits} acertos</div>
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
-                        {expandedNeighborsResult.plusOneList.join(' ')}
-                      </div>
-                    </div>
-                    <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Lista -1</div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
-                        {expandedNeighborsResult.stats.minusOne.percentage.toFixed(1)}%
-                      </div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.minusOne.hits} acertos</div>
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
-                        {expandedNeighborsResult.minusOneList.join(' ')}
-                      </div>
-                    </div>
-                  </div>
+      {
+        activeTab === 'ranges' && (
+          <div className="card" style={{
+            marginBottom: '1.5rem',
+            border: '1px solid #e11d48',
+            background: 'linear-gradient(to right, rgba(225, 29, 72, 0.1), transparent)'
+          }}>
+            <h3 style={{ color: '#e11d48', marginBottom: '1rem' }}>🎯 Faixas Pós-Alvo</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+              Analise quais faixas (1–12, 13–24, 25–36) aparecem mais nos próximos 4 giros após o número alvo.
+            </p>
 
-                  <div className="card" style={{ border: '1px solid #ec4899' }}>
-                    <h4 style={{ color: '#ec4899', marginBottom: '1rem' }}>Desempenho Total (Sequência Expandida)</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Histórico</div>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#ec4899' }}>
-                          {expandedNeighborsResult.stats.total.percentage.toFixed(1)}%
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.total.hits} acertos</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 5</div>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last5.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
-                          {expandedNeighborsResult.windowStats.last5.percentage.toFixed(0)}%
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last5.hits}/5</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 10</div>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last10.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
-                          {expandedNeighborsResult.windowStats.last10.percentage.toFixed(0)}%
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last10.hits}/10</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 20</div>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last20.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
-                          {expandedNeighborsResult.windowStats.last20.percentage.toFixed(0)}%
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last20.hits}/20</div>
-                      </div>
-                    </div>
-                  </div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  Número-Alvo (0-36)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="36"
+                  value={targetNumber}
+                  onChange={(e) => setTargetNumber(Math.min(36, Math.max(0, parseInt(e.target.value) || 0)))}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    backgroundColor: '#020617',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: '1rem'
+                  }}
+                />
+              </div>
+              <div style={{ flex: 2 }}>
+                <button
+                  onClick={() => {
+                    if (!input.trim()) {
+                      setError('Por favor, insira uma lista de números primeiro.');
+                      return;
+                    }
+                    const numbers = input.trim().split(/[,\s]+/).map(s => parseInt(s, 10)).filter(n => !isNaN(n));
 
-                  {expandedBettingResult && (
-                    <>
-                      <h3 style={{ marginBottom: '1rem', marginTop: '2rem' }}>
-                        Simulação de Apostas (Vizinhos Expandido)
-                        {expandedBettingResult.status === 'BROKE' && <span style={{ color: 'var(--error-color)', marginLeft: '1rem' }}>🚨 QUEBROU</span>}
-                        {expandedBettingResult.status === 'SURVIVED' && <span style={{ color: 'var(--success-color)', marginLeft: '1rem' }}>✅ SOBREVIVEU</span>}
-                      </h3>
+                    let numbersToProcess = [...numbers];
+                    if (isReversed) {
+                      numbersToProcess.reverse();
+                    }
 
-                      <div className="results-grid">
-                        <div className="card">
-                          <h3>Saldo Final</h3>
-                          <div className="value" style={{ color: expandedBettingResult.finalBalance >= initialBankroll ? 'var(--success-color)' : 'var(--error-color)' }}>
-                            R$ {expandedBettingResult.finalBalance.toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="card">
-                          <h3>Pior Banca</h3>
-                          <div className="value" style={{ color: 'var(--error-color)' }}>
-                            R$ {expandedBettingResult.lowestBalance.toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="card">
-                          <h3>Aposta Máxima</h3>
-                          <div className="value">
-                            R$ {expandedBettingResult.maxBetUsed.toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="card">
-                          <h3>Estatísticas</h3>
-                          <div className="value" style={{ fontSize: '1.5rem' }}>
-                            {expandedBettingResult.totalWins}V / {expandedBettingResult.totalLosses}D
-                          </div>
-                        </div>
-                      </div>
+                    if (numbersToProcess.length === 0) {
+                      setError('Nenhum número válido encontrado.');
+                      return;
+                    }
 
-                      <div className="card" style={{ marginBottom: '2rem', height: '300px', padding: '1rem' }}>
-                        <h3 style={{ marginBottom: '1rem' }}>Evolução da Banca (Expandido)</h3>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={expandedBettingResult.log}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <XAxis dataKey="spinIndex" stroke="#94a3b8" />
-                            <YAxis stroke="#94a3b8" domain={['auto', 'auto']} />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
-                              itemStyle={{ color: '#f8fafc' }}
-                              formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Saldo']}
-                              labelFormatter={(label) => `Giro ${label}`}
-                            />
-                            <ReferenceLine y={initialBankroll} stroke="#94a3b8" strokeDasharray="3 3" />
-                            <Line
-                              type="monotone"
-                              dataKey="balanceAfter"
-                              stroke="#ec4899"
-                              strokeWidth={2}
-                              dot={false}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-
-                      <div className="log-section" style={{ marginBottom: '2rem' }}>
-                        <button
-                          onClick={() => setShowExpandedBetLog(!showExpandedBetLog)}
-                          style={{
-                            backgroundColor: 'transparent',
-                            border: '1px solid var(--border-color)',
-                            width: '100%'
-                          }}
-                        >
-                          {showExpandedBetLog ? 'Ocultar Log de Apostas (Expandido)' : 'Ver Log de Apostas (Expandido)'}
-                        </button>
-
-                        {showExpandedBetLog && (
-                          <div className="table-container" style={{ marginTop: '1rem' }}>
-                            <table className="log-table">
-                              <thead>
-                                <tr>
-                                  <th>#</th>
-                                  <th>Número</th>
-                                  <th>Aposta Total</th>
-                                  <th>Resultado</th>
-                                  <th>Lucro</th>
-                                  <th>Saldo</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {expandedBettingResult.log.map((row) => (
-                                  <tr key={row.spinIndex}>
-                                    <td>{row.spinIndex}</td>
-                                    <td>{row.number}</td>
-                                    <td>R$ {row.betAmount.toFixed(2)}</td>
-                                    <td className={row.result === 'WIN' ? 'status-hit' : 'status-miss'}>
-                                      {row.result === 'WIN' ? 'VITÓRIA' : 'DERROTA'}
-                                    </td>
-                                    <td style={{ color: row.profit >= 0 ? 'var(--success-color)' : 'var(--error-color)' }}>
-                                      {row.profit >= 0 ? '+' : ''}{row.profit.toFixed(2)}
-                                    </td>
-                                    <td style={{ fontWeight: 'bold' }}>
-                                      R$ {row.balanceAfter.toFixed(2)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+                    const results = analyzeRangesByTarget(numbersToProcess, targetNumber, 4);
+                    setRangeAnalysisResult(results);
+                    setError(null);
+                  }}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#e11d48',
+                    border: 'none',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    fontSize: '1rem'
+                  }}
+                >
+                  Analisar Faixas
+                </button>
+              </div>
             </div>
-          )}
 
-          {activeTab === 'optimized' && optimizedCoincidences && (
-            <div className="card" style={{
-              marginBottom: '1.5rem',
-              border: '1px solid #e879f9', // Pink/Fuchsia
-              background: 'linear-gradient(to right, rgba(232, 121, 249, 0.1), transparent)'
-            }}>
-              <h3 style={{ color: '#e879f9', marginBottom: '1rem' }}>⚡ Coincidências Otimizadas por Velocidade</h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Identificação da janela de giros ideal (2 a 10) para cada gatilho, classificando pela rapidez do acerto.
-              </p>
+            {rangeAnalysisResult && (
               <div className="table-container" style={{ margin: 0 }}>
                 <table>
                   <thead>
                     <tr>
-                      <th>Gatilho</th>
-                      <th>Faixa Alvo</th>
-                      <th>Melhor Janela</th>
-                      <th>% Acerto Nessa Janela</th>
-                      <th>Eficiência</th>
+                      <th>Faixa</th>
+                      <th>Intervalo</th>
+                      <th>Probabilidade</th>
+                      <th>Hits / Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {optimizedCoincidences.map((stat, idx) => (
-                      <tr key={idx}>
-                        <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{stat.config.trigger}</td>
-                        <td>{stat.config.targetRangeStart} – {stat.config.targetRangeEnd}</td>
-                        <td style={{ fontWeight: 'bold' }}>{stat.bestWindow} giros</td>
+                    {rangeAnalysisResult.map((row) => (
+                      <tr key={row.range}>
+                        <td style={{ fontWeight: 'bold' }}>{row.range}</td>
+                        <td>{row.min} a {row.max}</td>
                         <td style={{
-                          color: stat.bestPercentage >= 80 ? 'var(--success-color)' :
-                            stat.bestPercentage >= 50 ? '#f59e0b' : 'inherit',
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
+                          fontSize: '1.2rem',
+                          color: row.probabilidade >= 0.5 ? 'var(--success-color)' : 'inherit'
                         }}>
-                          {stat.bestPercentage.toFixed(1)}%
+                          {row.probabilidade.toFixed(3)} ({(row.probabilidade * 100).toFixed(1)}%)
                         </td>
                         <td>
-                          <span style={{
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: '4px',
-                            backgroundColor: 'rgba(0,0,0,0.3)',
-                            fontSize: '0.9rem',
-                            color: stat.urgency === 'Alta Urgência' ? '#f59e0b' : // Star/Gold
-                              stat.urgency === 'Médio Prazo' ? '#facc15' : // Yellow
-                                '#f87171' // Red
-                          }}>
-                            {stat.efficiencyIcon} {stat.urgency}
-                          </span>
+                          {row.hits} / {row.total}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        )
+      }
+
+      {
+        activeTab === 'expanded' && (
+          <div className="card" style={{
+            marginBottom: '1.5rem',
+            border: '1px solid #ec4899',
+            background: 'linear-gradient(to right, rgba(236, 72, 153, 0.1), transparent)'
+          }}>
+            <h3 style={{ color: '#ec4899', marginBottom: '1rem' }}>🎯 Vizinhos Expandido (+1 / -1)</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+              Gera listas de vizinhos originais, +1 e -1, e analisa o desempenho da sequência combinada.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  Número-Alvo
+                </label>
+                <select
+                  value={targetNumber}
+                  onChange={(e) => setTargetNumber(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    backgroundColor: '#020617',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: '1rem'
+                  }}
+                >
+                  {Array.from({ length: 37 }, (_, i) => i).map(num => (
+                    <option key={num} value={num}>{num}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  Vizinhos de Cada Lado
+                </label>
+                <select
+                  value={neighborsCount}
+                  onChange={(e) => setNeighborsCount(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    backgroundColor: '#020617',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: '1rem'
+                  }}
+                >
+                  <option value={2}>2 vizinhos</option>
+                  <option value={3}>3 vizinhos</option>
+                  <option value={4}>4 vizinhos</option>
+                  <option value={5}>5 vizinhos</option>
+                  <option value={6}>6 vizinhos</option>
+                </select>
+              </div>
             </div>
-          )}
-        </>
-      )}
-    </div>
+
+            <button
+              onClick={() => {
+                if (!input.trim()) {
+                  setError('Por favor, insira uma lista de números primeiro.');
+                  return;
+                }
+
+                const numbers = input
+                  .trim()
+                  .split(/[,\s]+/)
+                  .map(s => parseInt(s, 10))
+                  .filter(n => !isNaN(n));
+
+                if (numbers.length === 0) {
+                  setError('Nenhum número válido encontrado.');
+                  return;
+                }
+
+                let numbersToProcess = [...numbers];
+                if (isReversed) {
+                  numbersToProcess.reverse();
+                }
+
+                const analysis = analyzeExpandedNeighbors(numbersToProcess, targetNumber, neighborsCount);
+                setExpandedNeighborsResult(analysis);
+
+                // Run betting simulation on the expanded sequence
+                const betValues = betSequenceStr
+                  .split(/[,\s]+/)
+                  .map(s => parseFloat(s))
+                  .filter(n => !isNaN(n) && n > 0);
+
+                const betting = simulateExpandedBetting(
+                  numbersToProcess,
+                  analysis.uniqueNumbers,
+                  initialBankroll,
+                  betValues.length > 0 ? betValues : DEFAULT_BET_VALUES
+                );
+                setExpandedBettingResult(betting);
+
+                setError(null);
+              }}
+              style={{
+                width: '100%',
+                backgroundColor: '#ec4899',
+                border: 'none',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                color: 'white',
+                fontWeight: '600',
+                cursor: 'pointer',
+                fontSize: '1rem'
+              }}
+            >
+              Gerar Sequência Expandida
+            </button>
+
+            {expandedNeighborsResult && (
+              <div style={{ marginTop: '2rem' }}>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h4 style={{ color: '#ec4899', marginBottom: '0.5rem' }}>Sequência Final ({expandedNeighborsResult.uniqueNumbers.length} números únicos)</h4>
+                  <div style={{
+                    backgroundColor: '#334155',
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '1.1rem',
+                    wordBreak: 'break-all',
+                    lineHeight: '1.6'
+                  }}>
+                    {expandedNeighborsResult.finalSequence.join(' ')}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Vizinhos Originais</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
+                      {expandedNeighborsResult.stats.original.percentage.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.original.hits} acertos</div>
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                      {expandedNeighborsResult.originalList.join(' ')}
+                    </div>
+                  </div>
+                  <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Lista +1</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
+                      {expandedNeighborsResult.stats.plusOne.percentage.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.plusOne.hits} acertos</div>
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                      {expandedNeighborsResult.plusOneList.join(' ')}
+                    </div>
+                  </div>
+                  <div className="card" style={{ backgroundColor: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Lista -1</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ec4899' }}>
+                      {expandedNeighborsResult.stats.minusOne.percentage.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.minusOne.hits} acertos</div>
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                      {expandedNeighborsResult.minusOneList.join(' ')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card" style={{ border: '1px solid #ec4899' }}>
+                  <h4 style={{ color: '#ec4899', marginBottom: '1rem' }}>Desempenho Total (Sequência Expandida)</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Histórico</div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#ec4899' }}>
+                        {expandedNeighborsResult.stats.total.percentage.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.stats.total.hits} acertos</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 5</div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last5.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
+                        {expandedNeighborsResult.windowStats.last5.percentage.toFixed(0)}%
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last5.hits}/5</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 10</div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last10.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
+                        {expandedNeighborsResult.windowStats.last10.percentage.toFixed(0)}%
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last10.hits}/10</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Últimos 20</div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: expandedNeighborsResult.windowStats.last20.percentage > 50 ? 'var(--success-color)' : 'inherit' }}>
+                        {expandedNeighborsResult.windowStats.last20.percentage.toFixed(0)}%
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{expandedNeighborsResult.windowStats.last20.hits}/20</div>
+                    </div>
+                  </div>
+                </div>
+
+                {expandedBettingResult && (
+                  <>
+                    <h3 style={{ marginBottom: '1rem', marginTop: '2rem' }}>
+                      Simulação de Apostas (Vizinhos Expandido)
+                      {expandedBettingResult.status === 'BROKE' && <span style={{ color: 'var(--error-color)', marginLeft: '1rem' }}>🚨 QUEBROU</span>}
+                      {expandedBettingResult.status === 'SURVIVED' && <span style={{ color: 'var(--success-color)', marginLeft: '1rem' }}>✅ SOBREVIVEU</span>}
+                    </h3>
+
+                    <div className="results-grid">
+                      <div className="card">
+                        <h3>Saldo Final</h3>
+                        <div className="value" style={{ color: expandedBettingResult.finalBalance >= initialBankroll ? 'var(--success-color)' : 'var(--error-color)' }}>
+                          R$ {expandedBettingResult.finalBalance.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="card">
+                        <h3>Pior Banca</h3>
+                        <div className="value" style={{ color: 'var(--error-color)' }}>
+                          R$ {expandedBettingResult.lowestBalance.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="card">
+                        <h3>Aposta Máxima</h3>
+                        <div className="value">
+                          R$ {expandedBettingResult.maxBetUsed.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="card">
+                        <h3>Estatísticas</h3>
+                        <div className="value" style={{ fontSize: '1.5rem' }}>
+                          {expandedBettingResult.totalWins}V / {expandedBettingResult.totalLosses}D
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ marginBottom: '2rem', height: '300px', padding: '1rem' }}>
+                      <h3 style={{ marginBottom: '1rem' }}>Evolução da Banca (Expandido)</h3>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={expandedBettingResult.log}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="spinIndex" stroke="#94a3b8" />
+                          <YAxis stroke="#94a3b8" domain={['auto', 'auto']} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+                            itemStyle={{ color: '#f8fafc' }}
+                            formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Saldo']}
+                            labelFormatter={(label) => `Giro ${label}`}
+                          />
+                          <ReferenceLine y={initialBankroll} stroke="#94a3b8" strokeDasharray="3 3" />
+                          <Line
+                            type="monotone"
+                            dataKey="balanceAfter"
+                            stroke="#ec4899"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="log-section" style={{ marginBottom: '2rem' }}>
+                      <button
+                        onClick={() => setShowExpandedBetLog(!showExpandedBetLog)}
+                        style={{
+                          backgroundColor: 'transparent',
+                          border: '1px solid var(--border-color)',
+                          width: '100%'
+                        }}
+                      >
+                        {showExpandedBetLog ? 'Ocultar Log de Apostas (Expandido)' : 'Ver Log de Apostas (Expandido)'}
+                      </button>
+
+                      {showExpandedBetLog && (
+                        <div className="table-container" style={{ marginTop: '1rem' }}>
+                          <table className="log-table">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Número</th>
+                                <th>Aposta Total</th>
+                                <th>Resultado</th>
+                                <th>Lucro</th>
+                                <th>Saldo</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {expandedBettingResult.log.map((row) => (
+                                <tr key={row.spinIndex}>
+                                  <td>{row.spinIndex}</td>
+                                  <td>{row.number}</td>
+                                  <td>R$ {row.betAmount.toFixed(2)}</td>
+                                  <td className={row.result === 'WIN' ? 'status-hit' : 'status-miss'}>
+                                    {row.result === 'WIN' ? 'VITÓRIA' : 'DERROTA'}
+                                  </td>
+                                  <td style={{ color: row.profit >= 0 ? 'var(--success-color)' : 'var(--error-color)' }}>
+                                    {row.profit >= 0 ? '+' : ''}{row.profit.toFixed(2)}
+                                  </td>
+                                  <td style={{ fontWeight: 'bold' }}>
+                                    R$ {row.balanceAfter.toFixed(2)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      }
+
+      {
+        activeTab === 'optimized' && optimizedCoincidences && (
+          <div className="card" style={{
+            marginBottom: '1.5rem',
+            border: '1px solid #e879f9', // Pink/Fuchsia
+            background: 'linear-gradient(to right, rgba(232, 121, 249, 0.1), transparent)'
+          }}>
+            <h3 style={{ color: '#e879f9', marginBottom: '1rem' }}>⚡ Coincidências Otimizadas por Velocidade</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+              Identificação da janela de giros ideal (2 a 10) para cada gatilho, classificando pela rapidez do acerto.
+            </p>
+            <div className="table-container" style={{ margin: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Gatilho</th>
+                    <th>Faixa Alvo</th>
+                    <th>Melhor Janela</th>
+                    <th>% Acerto Nessa Janela</th>
+                    <th>Eficiência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {optimizedCoincidences.map((stat, idx) => (
+                    <tr key={idx}>
+                      <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{stat.config.trigger}</td>
+                      <td>{stat.config.targetRangeStart} – {stat.config.targetRangeEnd}</td>
+                      <td style={{ fontWeight: 'bold' }}>{stat.bestWindow} giros</td>
+                      <td style={{
+                        color: stat.bestPercentage >= 80 ? 'var(--success-color)' :
+                          stat.bestPercentage >= 50 ? '#f59e0b' : 'inherit',
+                        fontWeight: 'bold'
+                      }}>
+                        {stat.bestPercentage.toFixed(1)}%
+                      </td>
+                      <td>
+                        <span style={{
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '4px',
+                          backgroundColor: 'rgba(0,0,0,0.3)',
+                          fontSize: '0.9rem',
+                          color: stat.urgency === 'Alta Urgência' ? '#f59e0b' : // Star/Gold
+                            stat.urgency === 'Médio Prazo' ? '#facc15' : // Yellow
+                              '#f87171' // Red
+                        }}>
+                          {stat.efficiencyIcon} {stat.urgency}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      }
+
+    </div >
   );
 }
 
