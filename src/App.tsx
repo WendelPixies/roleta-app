@@ -42,6 +42,7 @@ function App() {
   const [showBetLog, setShowBetLog] = useState(false);
   const [showSquareBetLog, setShowSquareBetLog] = useState(false);
   const [showExpandedBetLog, setShowExpandedBetLog] = useState(false);
+  const [expandedOptimizedId, setExpandedOptimizedId] = useState<number | null>(null);
 
   const handleCalculate = () => {
     setError(null);
@@ -2362,6 +2363,8 @@ function App() {
             <h3 style={{ color: '#e879f9', marginBottom: '1rem' }}>⚡ Coincidências Otimizadas por Velocidade</h3>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
               Identificação da janela de giros ideal (2 a 10) para cada gatilho, classificando pela rapidez do acerto.
+              <br />
+              <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Clique em uma linha para ver o gráfico de evolução da eficiência.</span>
             </p>
             <div className="table-container" style={{ margin: 0 }}>
               <table>
@@ -2369,38 +2372,138 @@ function App() {
                   <tr>
                     <th>Gatilho</th>
                     <th>Faixa Alvo</th>
+                    <th>Ocorrências</th>
                     <th>Melhor Janela</th>
-                    <th>% Acerto Nessa Janela</th>
+                    <th>% Acerto</th>
                     <th>Eficiência</th>
+                    <th style={{ width: '50px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {optimizedCoincidences.map((stat, idx) => (
-                    <tr key={idx}>
-                      <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{stat.config.trigger}</td>
-                      <td>{stat.config.targetRangeStart} – {stat.config.targetRangeEnd}</td>
-                      <td style={{ fontWeight: 'bold' }}>{stat.bestWindow} giros</td>
-                      <td style={{
-                        color: stat.bestPercentage >= 80 ? 'var(--success-color)' :
-                          stat.bestPercentage >= 50 ? '#f59e0b' : 'inherit',
-                        fontWeight: 'bold'
-                      }}>
-                        {stat.bestPercentage.toFixed(1)}%
-                      </td>
-                      <td>
-                        <span style={{
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '4px',
-                          backgroundColor: 'rgba(0,0,0,0.3)',
-                          fontSize: '0.9rem',
-                          color: stat.urgency === 'Alta Urgência' ? '#f59e0b' : // Star/Gold
-                            stat.urgency === 'Médio Prazo' ? '#facc15' : // Yellow
-                              '#f87171' // Red
+                    <>
+                      <tr
+                        key={idx}
+                        onClick={() => setExpandedOptimizedId(expandedOptimizedId === stat.config.trigger ? null : stat.config.trigger)}
+                        style={{
+                          cursor: 'pointer',
+                          backgroundColor: expandedOptimizedId === stat.config.trigger ? 'rgba(232, 121, 249, 0.1)' : 'transparent',
+                          transition: 'background-color 0.2s'
+                        }}
+                      >
+                        <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{stat.config.trigger}</td>
+                        <td>{stat.config.targetRangeStart} – {stat.config.targetRangeEnd}</td>
+                        <td>{stat.triggerCount}</td>
+                        <td style={{ fontWeight: 'bold' }}>{stat.bestWindow} giros</td>
+                        <td style={{
+                          color: stat.bestPercentage >= 80 ? 'var(--success-color)' :
+                            stat.bestPercentage >= 50 ? '#f59e0b' : 'inherit',
+                          fontWeight: 'bold'
                         }}>
-                          {stat.efficiencyIcon} {stat.urgency}
-                        </span>
-                      </td>
-                    </tr>
+                          {stat.bestPercentage.toFixed(1)}%
+                        </td>
+                        <td>
+                          <span style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            fontSize: '0.9rem',
+                            color: stat.urgency === 'Alta Urgência' ? '#f59e0b' : // Star/Gold
+                              stat.urgency === 'Médio Prazo' ? '#facc15' : // Yellow
+                                '#f87171' // Red
+                          }}>
+                            {stat.efficiencyIcon} {stat.urgency}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center', color: '#e879f9' }}>
+                          {expandedOptimizedId === stat.config.trigger ? '▼' : '▶'}
+                        </td>
+                      </tr>
+                      {expandedOptimizedId === stat.config.trigger && (
+                        <tr>
+                          <td colSpan={7} style={{ padding: '0', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                            <div style={{ padding: '1.5rem' }}>
+                              <h4 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#e879f9', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                📈 Evolução da Eficiência (Janelas 2 a 10)
+                              </h4>
+
+                              <div style={{ height: '300px', width: '100%', marginBottom: '2rem' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={stat.windowStats} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                    <XAxis
+                                      dataKey="windowSize"
+                                      stroke="#94a3b8"
+                                      label={{ value: 'Tamanho da Janela (Giros)', position: 'insideBottom', offset: -15, fill: '#94a3b8' }}
+                                    />
+                                    <YAxis
+                                      stroke="#94a3b8"
+                                      domain={[0, 100]}
+                                      unit="%"
+                                      label={{ value: 'Taxa de Acerto', angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
+                                    />
+                                    <Tooltip
+                                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                      itemStyle={{ color: '#f8fafc' }}
+                                      formatter={(value: number) => [`${value.toFixed(1)}%`, 'Acerto']}
+                                      labelFormatter={(label) => `Janela de ${label} giros`}
+                                    />
+                                    <ReferenceLine y={50} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: '50%', fill: '#10b981', fontSize: 12 }} />
+                                    <Line
+                                      type="monotone"
+                                      dataKey="percentage"
+                                      stroke="#e879f9"
+                                      strokeWidth={3}
+                                      dot={{ r: 5, fill: '#e879f9', strokeWidth: 2, stroke: '#fff' }}
+                                      activeDot={{ r: 7, stroke: '#e879f9', strokeWidth: 2, fill: '#fff' }}
+                                    />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+
+                              <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', fontSize: '0.9rem', borderCollapse: 'separate', borderSpacing: '0 4px' }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ textAlign: 'left', color: 'var(--text-secondary)' }}>Janela</th>
+                                      {stat.windowStats.map(ws => (
+                                        <th key={ws.windowSize} style={{ textAlign: 'center', minWidth: '50px' }}>
+                                          {ws.windowSize}G
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr>
+                                      <td style={{ fontWeight: 'bold', color: '#e879f9' }}>% Acerto</td>
+                                      {stat.windowStats.map(ws => (
+                                        <td key={ws.windowSize} style={{
+                                          textAlign: 'center',
+                                          color: ws.percentage >= 50 ? '#10b981' : 'inherit',
+                                          fontWeight: ws.windowSize === stat.bestWindow ? 'bold' : 'normal',
+                                          backgroundColor: ws.windowSize === stat.bestWindow ? 'rgba(232, 121, 249, 0.1)' : 'transparent',
+                                          borderRadius: '4px'
+                                        }}>
+                                          {ws.percentage.toFixed(0)}%
+                                        </td>
+                                      ))}
+                                    </tr>
+                                    <tr>
+                                      <td style={{ fontWeight: 'bold', color: 'var(--text-secondary)' }}>Acertos</td>
+                                      {stat.windowStats.map(ws => (
+                                        <td key={ws.windowSize} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                          {ws.hits}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </table>
